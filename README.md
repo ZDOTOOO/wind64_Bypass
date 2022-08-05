@@ -1,4 +1,4 @@
-> # **Neptune's wind64 EAC Bypass for Rec Room**
+> # **Imabot's wind64 EAC Bypass for Rec Room**
 Unpatched EAC Bypass made for Rec Room by Imabot#0001 & neptune#1995 (me), used JUN - AUG. Im releasing this publically due to skids profitting off our work.
 
 > **Prerequisites:**
