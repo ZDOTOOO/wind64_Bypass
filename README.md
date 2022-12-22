@@ -1,6 +1,8 @@
 > # **wind64 EAC Bypass for Rec Room**
 EAC Bypass made for Rec Room by Imabot#0001 & neptune#1995 (me), used JUN - AUG 2022. Im releasing this publically due to reselling. This bypass works on most other EAC games without issues. Credit to https://github.com/katlogic/WindowsD used to temporarily disable DSE.
 
+- Sidenote: This bypass has been patched on Rec Room; however it still works on most other EAC games.
+
 ![](https://img.shields.io/github/downloads/neptuneq/wind64_Bypass/total)
 
 > **Prerequisites:**
