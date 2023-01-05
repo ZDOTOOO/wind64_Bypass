@@ -19,6 +19,7 @@ activateProtection(): Prevents basic memory scanners from opening the cheat engi
 enableDRM(altitude OPTIONAL, secondaryprocessid OPTIONAL ) : Prevents normal memory scanners from reading the Cheat Engine process (kernelmode)  The secondaryprocessid lets you protect another process. E.g the game itself, so they can't easily see what you change 
 
 fullAccess(address,size): Changes the protection of a block of memory to writable and executable
+setMemoryProtection(address, size, {R:boolean; W: Boolean; X: Boolean}): Sets the given protection on the address range. Note, some systems do not support X and W to be true at the same time
 
 loadTable(filename, merge OPTIONAL): Loads a .ct or .cetrainer. If merge is provided and set to true it will not clear the old table
 loadTable(stream ,merge OPTIONAL, ignoreluascriptdialog BOOLEAN): Loads a table from a stream object
@@ -63,7 +64,7 @@ readPointer(address): In a 64-bit target this equals readQword, in a 32-bit targ
 readFloat(address) : Reads a single precision floating point value from the specified address
 readDouble(address) : Reads a double precision floating point value from the specified address
 readString(address, maxlength, widechar OPTIONAL) : Reads a string till it encounters a 0-terminator. Maxlength is just so you won't freeze for too long, set to 6000 if you don't care too much. Set WideChar to true if it is encoded using a widechar formatting
-writeShortInteger(address,value) / writeByte(address,value) : Writes a 16-bit integer to the specified address. Returns true on success
+writeShortInteger(address,value) / writeByte(address,value) : Writes a 8-bit integer to the specified address. Returns true on success
 writeSmallInteger(address,value) : Writes a 16-bit integer to the specified address. Returns true on success
 writeInteger(address,value) : Writes a 32-bit integer to the specified address. Returns true on success
 writeQword(address, value): Write a 64-bit integer to the specified address. Returns true on success
@@ -126,6 +127,8 @@ writeRegionToFile(filename, sourceaddress,size) : Writes the given region to a f
 readRegionFromFile(filename, destinationaddress)
 
 resetLuaState(): This will create a new lua state that will be used. (Does not destroy the old one, so memory leak)
+getGlobalVariable(string): Returns the given variable from the main lua state. Only basic types are supported.  (Handy for new lua state threads)
+setGlobalVariable(string, something): Sets the global variable names string in the main lua state.  Only basic types are supported
 
 createRef(...): integer - Returns an integer reference that you can use with getRef. Useful for objects that can only store integers and need to reference lua objects.  (Component.Tag...)
 getRef(integer): ... - Returns whatever the reference points out
@@ -166,6 +169,10 @@ extractFileName(filepath): returns the filename of the path
 extractFileExt(filepath): returns the file extension of the path
 extractFileNameWithoutExt(filepath): Returns the filename of the path, without the extension
 extractFilePath(filepath): removes the filename from the path
+
+getTempFolder() : Returns the path to the temp folder
+fileExists(pathtofile): Returns true if a file exists at that path
+deleteFile(pathtofile): Returns true if a file existed at that path, and now not anymore
 
 enableWindowsSymbols(): Will download the PDB files of Windows and load them (Takes a long time the first time)
 getAddress(string, local OPTIONAL): returns the address of a symbol. Can be a modulename or an export. set Local to true if you wish to querry the symboltable of the ce process
@@ -268,6 +275,9 @@ registerAddressLookupCallback(function(integer):string): ID
 
 unregisterAddressLookupCallback(ID): Removes the callback
 
+registerGlobalStructureListUpdateNotification(function(sender)): ID -  Calls the given function each time the list is updated
+unregisterGlobalStructureListUpdateNotification(id) - removes the callback with the given ID
+
 
 registerStructureAndElementListCallback(function StructureListCallback(), function elementlistcallback(id1,id2) ) : Registers a function to be called when a structure needs to be dissected 
   function StructureListCallback() will be a function that returns an array of list of structures in table format
@@ -332,7 +342,7 @@ getUniqueAOB(address): AOBString,Offset - Scans for a unique AOB for the given a
 
 showMessage(text) : shows a messagebox with the given text
 inputQuery(caption, prompt, initialstring): Shows a dialog where the user can input a string. This function returns the given string, or nil on cancel
-showSelectionList(title, caption, stringlist, allowCustomInput OPTIONAL): integer,string - Shows a menu with the given list. It returns the linenumber (starting at 0) and the selected string.  Linenumber is -1 if the user was allowed to enter custom input
+showSelectionList(title, caption, stringlist, allowCustomInput OPTIONAL, formname OPTIONAL): integer,string - Shows a menu with the given list. It returns the linenumber (starting at 0) and the selected string.  Linenumber is -1 if the user was allowed to enter custom input
 
 messageDialog(text, type, buttons...) : pops up a messagebox with a specific icon/sound with the specified buttons (mbok, mbyes, ....)
 messageDialog(title, text, type, buttons...): ^ but adds a custom title
@@ -373,8 +383,10 @@ getProcessIDFromProcessName(name) : returns a processid
 openProcess(processid) : causes cheat engine to open the given processid
 openProcess(processname): causes cheat engine to find and open the given process
 openFileAsProcess(filename,is64bit OPTIONAL,startaddress OPTIONAL): causes cheat engine to open the file with memory access as if it's a process
+getOpenedFileSize(): Returns the file of the opened file
 saveOpenedFile(filename OPTIONAL): Saves the changes of the opened file, set filename if you want a different file
 setPointerSize(size): Sets the size cheat engine will deal with pointers in bytes. (Some 64-bit processes can only use 32-bit addresses)
+getPointerSize() : Gets the current pointersize
 setAssemblerMode(int): 0=32-bit, 1=64-bit
 pause() : pauses the current opened process
 unpause(): resumes the current opened process
@@ -420,6 +432,8 @@ convertKeyComboToString({key1,...}): ^
 outputDebugString(text): Outputs a message using the windows OutputDebugString message. You can use tools like dbgview to read this. Useful for testing situations where the GUI freezes
 
 shellExecute(command, parameters OPTIONAL, folder OPTIONAL, showcommand OPTIONAL): Executes a given command
+runCommand(exepath, parameters or {parameter1, parameter2}, pathtoexecutein OPTIONAL): Executes the given command and returns the output of the command as a string and the exitcode as an integer (Should not open a console window) If pathtoexecutein is not provided the path will be the current working directory of CE
+
 
 getTickCount() :  Returns the current tickcount since windows was started. Each tick is one millisecond
 processMessages() :  Lets the main eventhandler process the new messages (allows for new button clicks)
@@ -572,7 +586,6 @@ getCheatEngineDir(): Returns the folder Cheat Engine is located at
 getCheatEngineProcessID(): Returns the processid of cheat engine
 
 getAutorunPath() : Returns the autorun path
-getUserDocumentsPath() : Returns the path to the user documents folder. 
 
 
 disassemble(address): Disassembles the given address and returns a string in the format of "address - bytes - opcode : extra"
@@ -722,6 +735,7 @@ debug_isDebugging(): Returns true if the debugger has been started
 debug_getCurrentDebuggerInterface() : Returns the current debuggerinterface used (1=windows, 2=VEH 3=Kernel, nil=no debugging active)
 debug_canBreak(): Returns true if there is a possibility the target can stop on a breakpoint. 6.4+
 debug_isBroken(): Returns true if the debugger is currently halted on a thread
+debug_isStepping(): Returns true if the debugger was single stepping an instruction earlier
 debug_getBreakpointList(): Returns a lua table containing all the breakpoint addresses
 debug_breakThread(threadid): Breaks the thread with the specific threadID (Note: The thread may not break instantly and may have to be awakened first)
 
@@ -1574,6 +1588,8 @@ properties
   Items: ListItems - The ListItems objects of the listview
   ItemIndex: integer - The currently selected index in the Items object  (-1 if nothing is selected)
   Selected: ListItem - The currently selected listitem (nil if nothing is selected)
+  TopItem: ListItem - The first visible item in the listview
+  VisibleRowCount: integer - The number of lines currently visible
   Canvas: Canvas - The canvas object used to render the listview  (Readonly)
   AutoWidthLastColumn: Boolean - When set to true the last column will resize when the control resizes
   HideSelection: Boolean - When set to true the selection will not hide when the focus leaves the control
@@ -1635,6 +1651,7 @@ properties
   [] = Items[]
   Index: Integer - The index based on the parent
   AbsoluteIndex: Integer - The index based on the TreeView's Treenodes object (Items)
+  ImageIndex: integer - The image to show from the attached ImageList
   Selected: Boolean - Set to true if currently selected
   MultiSelected: Boolean - Set to true if selected as well, but not the main selected object
   Data: Pointer - Space to store 4 or 8 bytes depending on which version of CE is used
@@ -1682,6 +1699,7 @@ methods
   fullCollapse()  : Collapses all the nodes, including the children's nodes
   fullExpand() : Expands all the nodes and all their children
   saveToFile(filename): Saves the contents of the treeview to disk
+  loadFromFile(filename)
 
 
 
@@ -2195,6 +2213,8 @@ properties
   OnDeactivate: function(memoryrecord,before,currentstate):boolean - The function to call when the memoryrecord will change (or changed) Active to false. If before is true, not returning true will cause the deactivation to stop.
   OnDestroy: function() - Called when the memoryrecord is destroyed.
   OnGetDisplayValue: function(memoryrecord,valuestring):boolean,string - This function gets called when rendering the value of a memory record. Return true and a new string to override the value shown
+  OnChangedValue: function(memoryrecord, oldvalue, newvalue): This function gets called whenever the value of a memory record has changed
+  OnChangedValueByUser: function(memoryrecord, oldvalue, newvalue):This function gets called whenever the value of a memory record has changed by the user
   DontSave: boolean - Don't save this memoryrecord and it's children
 
 methods
@@ -2296,7 +2316,7 @@ createMemScan(progressbar OPTIONAL) : Returns a new MemScan class object
 properties
   LastScanWasRegionScan: boolean - returns true is the previous scan was an unknown initial value
   LastScanValue: string
-  LastScanType: ScanType/string - 'stNewScan', 'stFirstScan', 'stNextScan'
+  LastScanType: ScanType/string - 'stNewScan', 'st v   ', 'stNextScan'
   ScanresultFolder: string - Path where the results are stored  
   OnScanDone: function(memscan) - Set a function to be called when the scan has finished
   OnGuiUpdate: function(memscan, TotalAddressesToScan, CurrentlyScanned, ResultsFound) - Called during the scan so you can update the interface if needed
@@ -2691,6 +2711,7 @@ Properties:
   Offset: integer - The offset of this element
   Name: string - The name of this element
   Vartype: integer - The variable type of this element
+  DisplayMethod: string - The displaymethod of the entry : 'dtUnsignedInteger', 'dtSignedInteger' or 'dtHexadecimal'
   ChildStruct: structure - If not nil this element is a pointer to the structure defined here
   ChildStructStart: integer - The number of bytes inside the provided childstruct. (E.g: It might point to offset 10 of a certain structure)
   Bytesize: integer - The number of bytes of this element. Readonly for basic types, writable for types that require a defined length like strings and array of bytes

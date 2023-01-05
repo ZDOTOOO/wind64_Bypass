@@ -523,7 +523,7 @@ crSizeAll     = -22
   clAqua    = 0xFFFF00
   clLtGray  = 0xC0C0C0 -- clSilver alias
   clDkGray  = 0x808080 -- clGray alias
-  clWhite   = 0xFFFFFF
+  clWhite   = 0x0000FF
   StandardColorsCount = 16
 
   -- extended colors

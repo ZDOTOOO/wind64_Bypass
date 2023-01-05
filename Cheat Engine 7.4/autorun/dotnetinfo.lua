@@ -10,6 +10,8 @@ else
   pathsep='/'
 end
 
+debugInstanceLookup=false
+
 local DPIMultiplier=(getScreenDPI()/96)
 local CONTROL_MONO=0
 local CONTROL_DOTNET=1
@@ -30,11 +32,14 @@ local function CTypeToString(ctype)
 end
 
 local function getClassInstances(Class, ProgressBar) 
-  --print("Looking up instances for "..Class.Name) 
+  if debugInstanceLookup then print("Looking up instances for "..Class.Name) end
+  
   if Class.Image.Domain.Control==CONTROL_MONO then
     --get the vtable and then scan for objects with this
+    if debugInstanceLookup then print("Mono method") end
     return mono_class_findInstancesOfClassListOnly(nil, Class.Handle)    
   else
+    if debugInstanceLookup then print("MS .NET method") end
     return DataSource.DotNetDataCollector.enumAllObjectsOfType(Class.Image.Handle, Class.Handle)    
   end  
 end
@@ -871,6 +876,7 @@ local function InheritanceResize(gbInheritance, now)
 end
 
 local function getMethodAddress(Method)
+  _G.lastmethod=Method
   if Method.Class.Image.Domain.Control==CONTROL_MONO then
     local address=mono_compile_method(Method.Handle)
     if address and address~=0 then 
@@ -887,6 +893,36 @@ local function getMethodAddress(Method)
       if Method.Class.Image.DotNetPipeModuleID==nil then
         --print("getting module id for "..Method.Class.Image.FileName)
         Method.Class.Image.DotNetPipeModuleID=dotnet_getModuleID(Method.Class.Image.FileName)
+   
+        --Method.Class.Image.DotNetPipeModuleID=nil --debug
+        
+        if Method.Class.Image.DotNetPipeModuleID==nil then
+          --not found by name, try finding 10 classes in this image
+          if Method.Class.Image.Classes==nil then
+            Method.Class.Image.Classes={} 
+          end
+          
+          if #Method.Class.Image.Classes==0 then
+            getClasses(Method.Class.Image)
+          end
+          
+          if #Method.Class.Image.Classes==0 then
+            return nil, "The image that contains this class, doesn't contain any classes..."
+          end
+          
+          local classnamelist={}
+          local c=0
+          for i=1,#Method.Class.Image.Classes do
+            local cn=Method.Class.Image.Classes[i].Name
+            if cn:find("%<")==nil and cn:find("%^")==nil then       
+              table.insert(classnamelist, Method.Class.Image.Classes[i].Name)
+              c=c+1
+              if c>=10 then break end
+            end
+          end
+          
+          Method.Class.Image.DotNetPipeModuleID=dotnet_getModuleIDFromClassList(Method.Class.Image.FileName, classnamelist)
+        end
       end
       
       if Method.Class.Image.DotNetPipeModuleID then
@@ -1178,7 +1214,7 @@ local function SpawnInjectMethodDialog(frmDotNetInfo)
     end
   else
     --use the already existing mono way
-    mono_invoke_method_dialog(Domain.DomainHandle, Method.Handle, getAddressSafe(frmDotNetInfo.comboFieldBaseAddress.Text)) 
+    mono_invoke_method_dialog(Method.Class.Image.Domain.Handle, Method.Handle, getAddressSafe(frmDotNetInfo.comboFieldBaseAddress.Text)) 
   end
   
   
@@ -1522,13 +1558,14 @@ end
 
 
 local function FieldValueUpdaterTimer(frmDotNetInfo, sender)
+--todo: only update the visible entries
   local i
   local address=getAddressSafe(frmDotNetInfo.comboFieldBaseAddress.Text)
   local Class=frmDotNetInfo.CurrentlyDisplayedClass
   local value
   
-  if Class then
-    for i=0, frmDotNetInfo.lvStaticFields.Items.Count-1 do
+  if Class and frmDotNetInfo.lvStaticFields.TopItem~=nil then
+    for i=frmDotNetInfo.lvStaticFields.TopItem.Index, math.min(frmDotNetInfo.lvStaticFields.Items.Count-1, frmDotNetInfo.lvStaticFields.TopItem.Index+frmDotNetInfo.lvStaticFields.VisibleRowCount) do
       local ci=frmDotNetInfo.lvStaticFields.Items[i].Data
       if ci>0 and ci<=#Class.Fields then
         
@@ -1564,7 +1601,8 @@ local function FieldValueUpdaterTimer(frmDotNetInfo, sender)
   end
   
   if address and Class then 
-    for i=0, frmDotNetInfo.lvFields.Items.Count-1 do
+    for i=frmDotNetInfo.lvFields.TopItem.Index, math.min(frmDotNetInfo.lvFields.Items.Count-1, frmDotNetInfo.lvFields.TopItem.Index+frmDotNetInfo.lvFields.VisibleRowCount) do
+    --for i=0, frmDotNetInfo.lvFields.Items.Count-1 do
       local ci=frmDotNetInfo.lvFields.Items[i].Data
       if ci>0 and ci<=#Class.Fields then
         local a=address+Class.Fields[ci].Offset
@@ -1603,6 +1641,8 @@ local function FieldValueUpdaterTimer(frmDotNetInfo, sender)
 end
 
 local function btnLookupInstancesClick(frmDotNetInfo, sender)
+  if debugInstanceLookup then print("btnLookupInstancesClick") end
+
   local Class=frmDotNetInfo.CurrentlyDisplayedClass
   if Class==nil then return end
   
@@ -1621,7 +1661,7 @@ local function btnLookupInstancesClick(frmDotNetInfo, sender)
 
 
   
-  pb=createProgressBar(f)
+  local pb=createProgressBar(f)
   pb.BorderSpacing.Left=DPIMultiplier*1
   pb.BorderSpacing.Right=DPIMultiplier*1
   
@@ -1664,9 +1704,15 @@ local function btnLookupInstancesClick(frmDotNetInfo, sender)
   btnCancel.OnClick=function(s) f.close() end
 
   f.OnClose=function(sender)
+    if debugInstanceLookup then print("LookupInstances: f.OnClose") end
+    
     if scannerThread then --scannerThread is free on terminate, but before it does that it syncs and sets this var to nil
+      if debugInstanceLookup then print("Thread still alive. Terminating thread") end    
       scannerThread.terminate()
+    else
+      if debugInstanceLookup then print("thread was finished. No need to terminate") end  
     end
+    f=nil --don't access f after this. it has been destroyed (caFree)
     return caFree      
   end
 
@@ -1677,6 +1723,7 @@ local function btnLookupInstancesClick(frmDotNetInfo, sender)
   --create the thread that will do the scan
   --it's possible the thread finishes before showmodal is called, but thanks to synchronize that won't happen
   scannerThread=createThread(function(t)
+    if debugInstanceLookup then print("scannerThread start") end
     t.Name='Instance Scanner'
     
     local r=getClassInstances(Class,pb)
@@ -1686,27 +1733,32 @@ local function btnLookupInstancesClick(frmDotNetInfo, sender)
         results[i]=r[i]
       end
     end
+    
+    if debugInstanceLookup then print("scan finished") end
 
+    scannerThread=nil
     synchronize(function() 
+      if debugInstanceLookup then print("sending modalresult to f") end    
       if not t.Terminated then 
         f.ModalResult=mrOK 
+      else
+        if debugInstanceLookup then print("scan was terminated") end    
+        return
+      end       
+    
+      if debugInstanceLookup then print("scanFinishedProperly") end
+      local i
+      frmDotNetInfo.comboFieldBaseAddress.clear()
+      for i=1,#results do
+        frmDotNetInfo.comboFieldBaseAddress.Items.add(string.format("%.8x",results[i]))
       end 
+
+      if #results then
+        frmDotNetInfo.comboFieldBaseAddress.ItemIndex=0      
+        frmDotNetInfo.comboFieldBaseAddress.OnChange(frmDotNetInfo.comboFieldBaseAddress)
+      end  
     end)
   end)
-  
-  
-  if f.showModal()==mrOK then
-    local i
-    frmDotNetInfo.comboFieldBaseAddress.clear()
-    for i=1,#results do
-      frmDotNetInfo.comboFieldBaseAddress.Items.add(string.format("%.8x",results[i]))
-    end 
-
-    if #results then
-      frmDotNetInfo.comboFieldBaseAddress.ItemIndex=0      
-      frmDotNetInfo.comboFieldBaseAddress.OnChange(frmDotNetInfo.comboFieldBaseAddress)
-    end
-  end
 end
 
 local function lvStaticFieldsDblClick(frmDotNetInfo,sender)
